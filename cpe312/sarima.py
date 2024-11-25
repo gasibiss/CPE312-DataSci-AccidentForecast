@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 from statsmodels.tsa.stattools import adfuller
 import matplotlib.pyplot as plt
 import os
@@ -61,24 +61,32 @@ try:
     if train_data.empty or test_data.empty:
         raise ValueError("Train or Test dataset is empty. Check data filtering conditions.")
 
-    # Define the parameter grid for ARIMA
-    p_values = [0, 1, 2]
-    d_values = [0, 1]
-    q_values = [0, 1, 2]
-    
-    # Create a list of all possible combinations of p, d, q
-    parameter_combinations = list(product(p_values, d_values, q_values))
+    p_values = [0, 1, 2, 3]  # ลองเพิ่มค่าของ p
+    d_values = [0, 1]  # ตรวจสอบว่าการต่างลำดับ 1 หรือไม่
+    q_values = [0, 1, 2, 3]  # เพิ่มค่าของ q เพื่อจับความผันผวนในข้อมูล
+
+    P_values = [0, 1, 2]  # เพิ่ม P เพื่อจับการเปลี่ยนแปลงตามฤดูกาล
+    D_values = [0, 1]  # ทดสอบการต่างลำดับตามฤดูกาล
+    Q_values = [0, 1, 2]  # เพิ่ม Q เพื่อจับความผิดพลาดตามฤดูกาล
+
+    seasonal_period = 12  # หากข้อมูลมีฤดูกาลเป็นรายปี
+
+
+    # Create a list of all possible combinations of (p, d, q, P, D, Q)
+    parameter_combinations = list(product(p_values, d_values, q_values, P_values, D_values, Q_values))
 
     # Store the results
     best_rmse = float('inf')
     best_order = None
     best_model = None
 
-    # Grid search over different combinations of p, d, q
+    # Grid search over different combinations of (p, d, q, P, D, Q)
     for order in parameter_combinations:
         try:
-            # Fit an ARIMA model with the current combination of parameters
-            model = ARIMA(train_data['Accident_Count'], order=order)
+            # Fit a SARIMA model with the current combination of parameters
+            model = SARIMAX(train_data['Accident_Count'],
+                            order=(order[0], order[1], order[2]),
+                            seasonal_order=(order[3], order[4], order[5], seasonal_period))
             model_fit = model.fit()
 
             # Forecast for the test period
@@ -111,7 +119,7 @@ try:
     plt.figure(figsize=(10, 6))
     plt.plot(test_data.index, test_data['Accident_Count'], label='Actual', color='blue')
     plt.plot(forecast_best.index, forecast_best, label='Forecast', color='red', linestyle='--')
-    plt.title(f"ARIMA Forecast vs Actual Data (2023) - Best Model: {best_order}")
+    plt.title(f"SARIMA Forecast vs Actual Data (2023) - Best Model: {best_order}")
     plt.xlabel("Date")
     plt.ylabel("Accident Count")
     plt.legend()
@@ -124,9 +132,9 @@ try:
         'Actual_Accident_Count': test_data['Accident_Count'].values,
         'Predicted_Accident_Count': forecast_best.values
     })
-    forecast_df.to_excel('forecasted_accidents_2022_optimized.xlsx', index=False)
+    forecast_df.to_excel('forecasted_accidents_2022_sarima.xlsx', index=False)
 
-    print("Forecasting completed. Optimized forecasts saved in 'forecasted_accidents_2022_optimized.xlsx'.")
+    print("Forecasting completed. Optimized forecasts saved in 'forecasted_accidents_2022_sarima.xlsx'.")
 
 except ValueError as e:
     print(f"ValueError: {e}")
