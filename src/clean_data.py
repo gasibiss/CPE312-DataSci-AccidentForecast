@@ -7,7 +7,7 @@ try:
     print("Current Working Directory:", os.getcwd())
     
     # Define base path dynamically
-    base_path = os.path.join(os.getcwd(), "cpe312")
+    base_path = os.path.join(os.getcwd(), "./data/")
     files = [os.path.join(base_path, f"accident{year}.xlsx") for year in range(2019, 2024)]
     
     df_list = []
@@ -49,7 +49,7 @@ try:
     df_filtered['รวมจำนวนผู้บาดเจ็บ'] = df_filtered['ผู้บาดเจ็บเล็กน้อย'] + df_filtered['ผู้บาดเจ็บสาหัส']
     df_filtered = df_filtered.drop(columns=['ผู้บาดเจ็บเล็กน้อย', 'ผู้บาดเจ็บสาหัส'])
 
-    output_file = "accident_combine_records_cleaned_final.xlsx"
+    output_file = "./data/accident_combine_records_cleaned_final.xlsx"
     df_filtered.to_excel(output_file, index=False)
     print(f"Filtered file saved as {output_file}")
     print("Your empty data count -->", count_null)

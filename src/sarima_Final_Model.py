@@ -3,7 +3,7 @@ import numpy as np
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from statsmodels.tsa.stattools import adfuller
 import matplotlib.pyplot as plt
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, r2_score
 from itertools import product
 import logging
 
@@ -19,9 +19,18 @@ def load_data(file_path):
 
 def test_stationarity(series):
     result = adfuller(series)
-    logging.info(f'ADF Statistic: {result[0]}')
-    logging.info(f'p-value: {result[1]}')
-    return result[1] <= 0.05
+    logging.info(f"ADF Statistic: {result[0]}")
+    logging.info(f"p-value: {result[1]}")
+    logging.info("Critical Values:")
+    for key, value in result[4].items():
+        logging.info(f"\t{key}: {value}")
+
+    if result[1] <= 0.05:
+        logging.info("The series is stationary (p-value <= 0.05).")
+        return True
+    else:
+        logging.info("The series is not stationary (p-value > 0.05).")
+        return False
 
 def prepare_data(df):
     df['Year'] = df['วันที่เกิดเหตุ'].dt.year
@@ -29,7 +38,7 @@ def prepare_data(df):
     monthly_accidents = df.groupby(['Year', 'Month']).size().reset_index(name='Accident_Count')
     monthly_accidents['Date'] = pd.to_datetime(monthly_accidents[['Year', 'Month']].assign(DAY=1))
     monthly_accidents.set_index('Date', inplace=True)
-    return monthly_accidents.asfreq('MS', method='ffill')  # Fill missing months
+    return monthly_accidents.asfreq('MS', method='ffill')
 
 def run_grid_search(train_data, test_data, p_values, d_values, q_values, P_values, D_values, Q_values, seasonal_period):
     parameter_combinations = list(product(p_values, d_values, q_values, P_values, D_values, Q_values))
@@ -60,33 +69,63 @@ def run_grid_search(train_data, test_data, p_values, d_values, q_values, P_value
 
     return best_model, best_order, best_rmse
 
+def evaluate_model(train_data, test_data, best_model, forecast_best):
+    train_forecast = best_model.fittedvalues
+    train_r2 = r2_score(train_data['Accident_Count'], train_forecast)
 
+    test_r2 = r2_score(test_data['Accident_Count'], forecast_best)
+
+    logging.info(f"Training R-squared: {train_r2}")
+    logging.info(f"Testing R-squared: {test_r2}")
+
+    return train_r2, test_r2
+
+def check_overfitting(train_r2, test_r2, threshold=0.1):
+    difference = train_r2 - test_r2
+    if difference > threshold:
+        logging.warning(f"Overfitting detected! Training R-squared: {train_r2:.4f}, Testing R-squared: {test_r2:.4f}, Difference: {difference:.4f}")
+        return True
+    else:
+        logging.info(f"No significant overfitting. Training R-squared: {train_r2:.4f}, Testing R-squared: {test_r2:.4f}")
+        return False
 
 def plot_forecast(test_data, forecast_best, best_order):
     plt.figure(figsize=(10, 6))
     plt.plot(test_data.index, test_data['Accident_Count'], label='Actual', color='blue')
     plt.plot(forecast_best.index, forecast_best, label='Forecast', color='red', linestyle='--')
-    plt.title(f"SARIMA Forecast vs Actual Data (2023) - Best Model: {best_order}")
+    plt.title(f"SARIMA Forecast vs Actual Data - Best Model: {best_order}")
     plt.xlabel("Date")
     plt.ylabel("Accident Count")
     plt.legend()
     plt.grid()
+    plt.savefig("./results/SARIMA_RESULT.png")
     plt.show()
 
 # Main execution
-file_path = 'accident_combine_records_cleaned_final.xlsx'
+file_path = './data/accident_combine_records_cleaned_final.xlsx'
 try:
     df = load_data(file_path)
     monthly_accidents = prepare_data(df)
 
+    # ทดสอบ Stationarity ของข้อมูลทั้งหมด
     if not test_stationarity(monthly_accidents['Accident_Count']):
-        logging.info("Data is non-stationary, differencing may be required.")
+        logging.info("Overall data is non-stationary, differencing may be required.")
     
-    # Split data
     train_data = monthly_accidents[monthly_accidents.index < '2023-01-01']
     test_data = monthly_accidents[monthly_accidents.index >= '2023-01-01']
 
-    # Define SARIMA parameter grid
+    # ทดสอบ Stationarity ของ Train และ Test
+    logging.info("Checking stationarity of training data...")
+    is_train_stationary = test_stationarity(train_data['Accident_Count'])
+    if not is_train_stationary:
+        logging.info("Train data is non-stationary. Differencing may be required.")
+
+    logging.info("Checking stationarity of testing data...")
+    is_test_stationary = test_stationarity(test_data['Accident_Count'])
+    if not is_test_stationary:
+        logging.info("Test data is non-stationary. Differencing may be required.")
+
+    # Parameters for SARIMA
     p_values = [0, 1, 2, 3]
     d_values = [0, 1]
     q_values = [0, 1, 2, 3]
@@ -103,17 +142,19 @@ try:
     forecast_best = best_model.predict(start=test_data.index[0], end=test_data.index[-1])
     forecast_best.index = test_data.index
 
+    train_r2, test_r2 = evaluate_model(train_data, test_data, best_model, forecast_best)
+
+    overfitting_detected = check_overfitting(train_r2, test_r2)
+
+    if overfitting_detected:
+        logging.info("Consider tuning the model parameters or simplifying the model to reduce overfitting.")
+    else:
+        logging.info("Model is well-balanced between training and testing data.")
+
     plot_forecast(test_data, forecast_best, best_order)
 
-    # Save forecasted data
-    forecast_df = pd.DataFrame({
-        'Date': test_data.index,
-        'Actual_Accident_Count': test_data['Accident_Count'].values,
-        'Predicted_Accident_Count': forecast_best.values
-    })
-    forecast_df.to_excel('forecasted_accidents_2022_sarima.xlsx', index=False)
+    forecast_df = pd.Data
 
-    logging.info("Forecasting completed. Optimized forecasts saved in 'forecasted_accidents_2022_sarima.xlsx'.")
 
 except Exception as e:
     logging.error(f"An unexpected error occurred: {e}")

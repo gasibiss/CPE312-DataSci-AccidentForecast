@@ -1,0 +1,7 @@
+Dependencies List
+
+pip install pandas
+pip install numpy
+pip install statsmodels
+pip install matplotlib
+pip install scikit-learn

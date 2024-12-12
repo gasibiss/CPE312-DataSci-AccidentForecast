@@ -94,10 +94,11 @@ def plot_forecast(test_data, forecast_best, best_order):
     plt.ylabel("Accident Count")
     plt.legend()
     plt.grid()
+    plt.savefig("./results/ARIMA_RESULT.png")
     plt.show()
 
 # Main execution
-file_path = 'accident_combine_records_cleaned_final.xlsx'
+file_path = './data/accident_combine_records_cleaned_final.xlsx'
 try:
     df = load_data(file_path)
     monthly_accidents = prepare_data(df)
@@ -139,8 +140,6 @@ try:
         'Predicted_Accident_Count': forecast_best.values,
         'R-squared': [r_squared] * len(test_data)
     })
-    forecast_df.to_excel('forecasted_accidents_2022_arima.xlsx', index=False)
-
     logging.info("Forecasting completed. Optimized forecasts saved in 'forecasted_accidents_2022_arima.xlsx'.")
 
 except Exception as e:
